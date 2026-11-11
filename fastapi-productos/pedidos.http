@@ -1,0 +1,93 @@
+### Variables
+@baseUrl = http://127.0.0.1:8000
+
+### 1. Asegurar Producto para las pruebas de pedidos
+POST {{baseUrl}}/productos/
+Content-Type: application/json
+
+{
+  "nombre": "Hamburguesa Especial",
+  "descripcion": "Carne premium con queso cheddar y bacon",
+  "precio_base": 8500.0,
+  "imagenes_url": ["https://ejemplo.com/burger.jpg"],
+  "disponible": true
+}
+
+### 2. Crear Pedido Exitoso (201 Created)
+POST {{baseUrl}}/pedidos/
+Content-Type: application/json
+
+{
+  "detalles": [
+    {
+      "producto_id": 1,
+      "cantidad": 2
+    }
+  ]
+}
+
+### 3. Error 422: Pedido con Producto Repetido en los detalles (RN-12)
+POST {{baseUrl}}/pedidos/
+Content-Type: application/json
+
+{
+  "detalles": [
+    {
+      "producto_id": 1,
+      "cantidad": 1
+    },
+    {
+      "producto_id": 1,
+      "cantidad": 3
+    }
+  ]
+}
+
+### 4. Error 422: Pedido sin detalles (Lista vacía)
+POST {{baseUrl}}/pedidos/
+Content-Type: application/json
+
+{
+  "detalles": []
+}
+
+### 5. Error 404: Producto Inexistente (Atomicidad UoW: se cancela y no se crea nada)
+POST {{baseUrl}}/pedidos/
+Content-Type: application/json
+
+{
+  "detalles": [
+    {
+      "producto_id": 99999,
+      "cantidad": 1
+    }
+  ]
+}
+
+### 6. Listar Pedidos Activos
+GET {{baseUrl}}/pedidos/
+
+### 7. Obtener Pedido por ID con sus detalles
+GET {{baseUrl}}/pedidos/1
+
+### 8. Actualizar Estado de Pedido (200 OK)
+PUT {{baseUrl}}/pedidos/1
+Content-Type: application/json
+
+{
+  "estado": "CONFIRMADO"
+}
+
+### 9. Error 422: Estado Fuera de los Permitidos
+PUT {{baseUrl}}/pedidos/1
+Content-Type: application/json
+
+{
+  "estado": "EN_CAMINO_INVALIDO"
+}
+
+### 10. Borrado Lógico de Pedido (204 No Content)
+DELETE {{baseUrl}}/pedidos/1
+
+### 11. Error 404: Operar sobre un Pedido Eliminado
+GET {{baseUrl}}/pedidos/1
