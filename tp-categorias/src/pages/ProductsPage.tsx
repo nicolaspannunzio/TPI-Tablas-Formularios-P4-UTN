@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "@tanstack/react-form";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
   getProductos,
@@ -9,6 +8,7 @@ import {
   deleteProducto,
 } from "../services/producto";
 import type { Producto, ProductoCreate } from "../types/producto";
+import ProductoModal from "../components/ProductoModal";
 import { DataTable } from "../components/ui/DataTable";
 import { LoadingState, EmptyState, ErrorState } from "../components/ui/StatusStates";
 
@@ -16,6 +16,11 @@ const ProductsPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProducto, setEditingProducto] = useState<Producto | null>(null);
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingProducto(null);
+  };
 
   const {
     data: productos = [],
@@ -50,55 +55,34 @@ const ProductsPage: React.FC = () => {
     },
   });
 
-  const form = useForm({
-    defaultValues: {
-      nombre: editingProducto?.nombre || "",
-      descripcion: editingProducto?.descripcion || "",
-      precio_base: editingProducto?.precio_base || 0,
-      disponible: editingProducto?.disponible ?? true,
-      imagenes_url: editingProducto?.imagenes_url?.join(", ") || "",
-    },
-    onSubmit: async ({ value }) => {
-      const payload: ProductoCreate = {
-        nombre: value.nombre,
-        descripcion: value.descripcion,
-        precio_base: Number(value.precio_base),
-        disponible: Boolean(value.disponible),
-        imagenes_url: value.imagenes_url
-          ? value.imagenes_url.split(",").map((s) => s.trim()).filter(Boolean)
-          : [],
-      };
-
-      if (editingProducto) {
-        updateMutation.mutate({ id: editingProducto.id, data: payload });
-      } else {
-        createMutation.mutate(payload);
-      }
-    },
-  });
+  const resetMutations = () => {
+    createMutation.reset();
+    updateMutation.reset();
+    deleteMutation.reset();
+  };
 
   const handleOpenCreate = () => {
+    resetMutations();
     setEditingProducto(null);
-    form.reset({ nombre: "", descripcion: "", precio_base: 0, disponible: true, imagenes_url: "" });
     setIsModalOpen(true);
   };
 
-  const handleOpenEdit = (prod: Producto) => {
-    setEditingProducto(prod);
-    form.reset({
-      nombre: prod.nombre,
-      descripcion: prod.descripcion,
-      precio_base: prod.precio_base,
-      disponible: prod.disponible,
-      imagenes_url: prod.imagenes_url?.join(", ") || "",
-    });
+  const handleOpenEdit = (item: Producto) => {
+    resetMutations();
+    setEditingProducto(item);
     setIsModalOpen(true);
   };
 
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setEditingProducto(null);
+  const handleSubmit = (data: ProductoCreate) => {
+    if (editingProducto) {
+      updateMutation.mutate({ id: editingProducto.id, data });
+    } else {
+      createMutation.mutate(data);
+    }
   };
+
+  const isSaving = createMutation.isPending || updateMutation.isPending;
+  const saveError = editingProducto ? updateMutation.error : createMutation.error;
 
   const columns: ColumnDef<Producto>[] = [
     {
@@ -110,6 +94,13 @@ const ProductsPage: React.FC = () => {
       accessorKey: "nombre",
       header: "Producto",
       cell: (info) => <span className="font-semibold text-gray-900">{info.getValue<string>()}</span>,
+    },
+    {
+      accessorKey: "descripcion",
+      header: "Descripción",
+      cell: (info) => (
+        <span className="text-gray-600 max-w-xs truncate block">{info.getValue<string>()}</span>
+      ),
     },
     {
       accessorKey: "precio_base",
@@ -138,17 +129,23 @@ const ProductsPage: React.FC = () => {
     {
       id: "acciones",
       header: "Acciones",
+      enableSorting: false,
       cell: ({ row }) => (
         <div className="flex justify-end gap-2">
           <button
-            onClick={() => handleOpenEdit(row.original)}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleOpenEdit(row.original);
+            }}
             className="px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition cursor-pointer"
           >
             Editar
           </button>
           <button
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               if (window.confirm("¿Deseas eliminar este producto?")) {
+                resetMutations();
                 deleteMutation.mutate(row.original.id);
               }
             }}
@@ -178,6 +175,12 @@ const ProductsPage: React.FC = () => {
         </button>
       </div>
 
+      {deleteMutation.isError && (
+        <div className="mb-4">
+          <ErrorState message={deleteMutation.error.message} />
+        </div>
+      )}
+
       {isLoading && <LoadingState message="Cargando productos..." />}
       {isError && (
         <ErrorState message={error instanceof Error ? error.message : "Error al conectar con la API"} />
@@ -190,128 +193,14 @@ const ProductsPage: React.FC = () => {
       )}
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-6 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">
-              {editingProducto ? "Editar Producto" : "Nuevo Producto"}
-            </h2>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                form.handleSubmit();
-              }}
-              className="space-y-4"
-            >
-              <form.Field
-                name="nombre"
-                validators={{
-                  onChange: ({ value }) => (!value.trim() ? "El nombre es obligatorio" : undefined),
-                }}
-              >
-                {(field) => (
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1">
-                      Nombre
-                    </label>
-                    <input
-                      value={field.state.value}
-                      onBlur={field.handleBlur}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      placeholder="Ej: Pizza Napolitana"
-                      className="w-full rounded-lg border border-gray-300 px-3.5 py-2 text-sm focus:border-indigo-600 focus:outline-hidden"
-                    />
-                    {field.state.meta.errors ? (
-                      <em className="text-xs text-rose-600 mt-1 block">
-                        {field.state.meta.errors.join(", ")}
-                      </em>
-                    ) : null}
-                  </div>
-                )}
-              </form.Field>
-
-              <form.Field
-                name="precio_base"
-                validators={{
-                  onChange: ({ value }) =>
-                    Number(value) < 0 ? "El precio base no puede ser negativo" : undefined,
-                }}
-              >
-                {(field) => (
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1">
-                      Precio Base ($)
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={field.state.value}
-                      onBlur={field.handleBlur}
-                      onChange={(e) => field.handleChange(Number(e.target.value))}
-                      className="w-full rounded-lg border border-gray-300 px-3.5 py-2 text-sm focus:border-indigo-600 focus:outline-hidden"
-                    />
-                    {field.state.meta.errors ? (
-                      <em className="text-xs text-rose-600 mt-1 block">
-                        {field.state.meta.errors.join(", ")}
-                      </em>
-                    ) : null}
-                  </div>
-                )}
-              </form.Field>
-
-              <form.Field name="descripcion">
-                {(field) => (
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1">
-                      Descripción
-                    </label>
-                    <textarea
-                      rows={2}
-                      value={field.state.value}
-                      onBlur={field.handleBlur}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      className="w-full rounded-lg border border-gray-300 px-3.5 py-2 text-sm focus:border-indigo-600 focus:outline-hidden"
-                    />
-                  </div>
-                )}
-              </form.Field>
-
-              <form.Field name="disponible">
-                {(field) => (
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="disponible"
-                      checked={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.checked)}
-                      className="rounded-sm border-gray-300 text-indigo-600 focus:ring-indigo-500 h-4 w-4 cursor-pointer"
-                    />
-                    <label htmlFor="disponible" className="text-sm font-medium text-gray-700 cursor-pointer">
-                      Producto disponible para venta
-                    </label>
-                  </div>
-                )}
-              </form.Field>
-
-              <div className="flex justify-end gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={handleCloseModal}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={createMutation.isPending || updateMutation.isPending}
-                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition disabled:opacity-50 cursor-pointer"
-                >
-                  Guardar
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <ProductoModal
+          key={editingProducto?.id ?? "nuevo"}
+          producto={editingProducto}
+          isSaving={isSaving}
+          error={saveError}
+          onSubmit={handleSubmit}
+          onClose={handleCloseModal}
+        />
       )}
     </main>
   );

@@ -1,7 +1,8 @@
 ### Variables
 @baseUrl = http://127.0.0.1:8000
 
-### 1. Asegurar Producto para las pruebas de pedidos
+### 1. Crear un producto para las pruebas (201)
+# @name crearProducto
 POST {{baseUrl}}/productos/
 Content-Type: application/json
 
@@ -13,81 +14,112 @@ Content-Type: application/json
   "disponible": true
 }
 
-### 2. Crear Pedido Exitoso (201 Created)
-POST {{baseUrl}}/pedidos/
+### 2. Crear segundo producto (201)
+# @name crearProducto2
+POST {{baseUrl}}/productos/
+Content-Type: application/json
+
+{
+  "nombre": "Papas fritas",
+  "descripcion": "Porción grande",
+  "precio_base": 3200.5,
+  "imagenes_url": [],
+  "disponible": true
+}
+
+### 3. Crear pedido con dos detalles (201). Total = 2*8500 + 1*3200.5 = 20200.5
+# @name crearPedido
+POST {{baseUrl}}/pedidos
 Content-Type: application/json
 
 {
   "detalles": [
-    {
-      "producto_id": 1,
-      "cantidad": 2
-    }
+    { "producto_id": {{crearProducto.response.body.id}},  "cantidad": 2 },
+    { "producto_id": {{crearProducto2.response.body.id}}, "cantidad": 1 }
   ]
 }
 
-### 3. Error 422: Pedido con Producto Repetido en los detalles (RN-12)
-POST {{baseUrl}}/pedidos/
-Content-Type: application/json
+### 4. Listar pedidos no eliminados (200)
+GET {{baseUrl}}/pedidos
 
-{
-  "detalles": [
-    {
-      "producto_id": 1,
-      "cantidad": 1
-    },
-    {
-      "producto_id": 1,
-      "cantidad": 3
-    }
-  ]
-}
+### 5. Obtener pedido por id con sus detalles (200)
+GET {{baseUrl}}/pedidos/{{crearPedido.response.body.id}}
 
-### 4. Error 422: Pedido sin detalles (Lista vacía)
-POST {{baseUrl}}/pedidos/
-Content-Type: application/json
-
-{
-  "detalles": []
-}
-
-### 5. Error 404: Producto Inexistente (Atomicidad UoW: se cancela y no se crea nada)
-POST {{baseUrl}}/pedidos/
-Content-Type: application/json
-
-{
-  "detalles": [
-    {
-      "producto_id": 99999,
-      "cantidad": 1
-    }
-  ]
-}
-
-### 6. Listar Pedidos Activos
-GET {{baseUrl}}/pedidos/
-
-### 7. Obtener Pedido por ID con sus detalles
-GET {{baseUrl}}/pedidos/1
-
-### 8. Actualizar Estado de Pedido (200 OK)
-PUT {{baseUrl}}/pedidos/1
+### 6. Actualizar estado (200)
+PUT {{baseUrl}}/pedidos/{{crearPedido.response.body.id}}
 Content-Type: application/json
 
 {
   "estado": "CONFIRMADO"
 }
 
-### 9. Error 422: Estado Fuera de los Permitidos
-PUT {{baseUrl}}/pedidos/1
+### 7. ERROR 422: producto repetido en los detalles (RN-12)
+POST {{baseUrl}}/pedidos
 Content-Type: application/json
 
 {
-  "estado": "EN_CAMINO_INVALIDO"
+  "detalles": [
+    { "producto_id": {{crearProducto.response.body.id}}, "cantidad": 1 },
+    { "producto_id": {{crearProducto.response.body.id}}, "cantidad": 3 }
+  ]
 }
 
-### 10. Borrado Lógico de Pedido (204 No Content)
-DELETE {{baseUrl}}/pedidos/1
+### 8. ERROR 422: pedido sin detalles (RN-12)
+POST {{baseUrl}}/pedidos
+Content-Type: application/json
 
-### 11. Error 404: Operar sobre un Pedido Eliminado
-GET {{baseUrl}}/pedidos/1
+{
+  "detalles": []
+}
+
+### 9. ERROR 422: cantidad menor que 1
+POST {{baseUrl}}/pedidos
+Content-Type: application/json
+
+{
+  "detalles": [
+    { "producto_id": {{crearProducto.response.body.id}}, "cantidad": 0 }
+  ]
+}
+
+### 10. ERROR 422: estado fuera de los permitidos
+PUT {{baseUrl}}/pedidos/{{crearPedido.response.body.id}}
+Content-Type: application/json
+
+{
+  "estado": "EN_CAMINO"
+}
+
+### 11. ERROR 404: detalle con producto inexistente (rollback: no se guarda ni el pedido)
+POST {{baseUrl}}/pedidos
+Content-Type: application/json
+
+{
+  "detalles": [
+    { "producto_id": {{crearProducto.response.body.id}}, "cantidad": 1 },
+    { "producto_id": 99999, "cantidad": 1 }
+  ]
+}
+
+### 12. ERROR 404: pedido inexistente
+GET {{baseUrl}}/pedidos/99999
+
+### 13. Borrado lógico (204)
+DELETE {{baseUrl}}/pedidos/{{crearPedido.response.body.id}}
+
+### 14. ERROR 404: obtener un pedido ya eliminado
+GET {{baseUrl}}/pedidos/{{crearPedido.response.body.id}}
+
+### 15. ERROR 404: actualizar un pedido ya eliminado
+PUT {{baseUrl}}/pedidos/{{crearPedido.response.body.id}}
+Content-Type: application/json
+
+{
+  "estado": "ENTREGADO"
+}
+
+### 16. ERROR 404: eliminar de nuevo un pedido ya eliminado
+DELETE {{baseUrl}}/pedidos/{{crearPedido.response.body.id}}
+
+### 17. El pedido eliminado ya no aparece en el listado (200)
+GET {{baseUrl}}/pedidos

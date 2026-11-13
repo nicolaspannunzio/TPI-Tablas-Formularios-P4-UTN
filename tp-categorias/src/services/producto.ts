@@ -1,10 +1,11 @@
 import type { Producto, ProductoCreate, ProductoUpdate } from "../types/producto";
+import { API_BASE, buildApiError } from "./http";
 
-const API_URL = "http://127.0.0.1:8000/productos";
+const API_URL = `${API_BASE}/productos`;
 
 export async function getProductos(): Promise<Producto[]> {
   const res = await fetch(`${API_URL}/`);
-  if (!res.ok) throw new Error("Error al obtener los productos");
+  if (!res.ok) throw await buildApiError(res, "Error al obtener los productos");
   return res.json();
 }
 
@@ -14,7 +15,7 @@ export async function createProducto(data: ProductoCreate): Promise<Producto> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error("Error al crear el producto");
+  if (!res.ok) throw await buildApiError(res, "Error al crear el producto");
   return res.json();
 }
 
@@ -24,13 +25,11 @@ export async function updateProducto({ id, data }: { id: number; data: ProductoU
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error("Error al actualizar el producto");
+  if (!res.ok) throw await buildApiError(res, "Error al actualizar el producto");
   return res.json();
 }
 
 export async function deleteProducto(id: number): Promise<void> {
-  const res = await fetch(`${API_URL}/${id}`, {
-    method: "DELETE",
-  });
-  if (!res.ok) throw new Error("Error al eliminar el producto");
+  const res = await fetch(`${API_URL}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildApiError(res, "Error al eliminar el producto");
 }

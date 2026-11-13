@@ -1,10 +1,11 @@
 import type { Ingrediente, IngredienteCreate, IngredienteUpdate } from "../types/ingrediente";
+import { API_BASE, buildApiError } from "./http";
 
-const API_URL = "http://127.0.0.1:8000/ingredientes";
+const API_URL = `${API_BASE}/ingredientes`;
 
 export async function getIngredientes(): Promise<Ingrediente[]> {
   const res = await fetch(`${API_URL}/`);
-  if (!res.ok) throw new Error("Error al obtener los ingredientes");
+  if (!res.ok) throw await buildApiError(res, "Error al obtener los ingredientes");
   return res.json();
 }
 
@@ -14,7 +15,7 @@ export async function createIngrediente(data: IngredienteCreate): Promise<Ingred
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error("Error al crear el ingrediente");
+  if (!res.ok) throw await buildApiError(res, "Error al crear el ingrediente");
   return res.json();
 }
 
@@ -24,13 +25,11 @@ export async function updateIngrediente({ id, data }: { id: number; data: Ingred
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-  if (!res.ok) throw new Error("Error al actualizar el ingrediente");
+  if (!res.ok) throw await buildApiError(res, "Error al actualizar el ingrediente");
   return res.json();
 }
 
 export async function deleteIngrediente(id: number): Promise<void> {
-  const res = await fetch(`${API_URL}/${id}`, {
-    method: "DELETE",
-  });
-  if (!res.ok) throw new Error("Error al eliminar el ingrediente");
+  const res = await fetch(`${API_URL}/${id}`, { method: "DELETE" });
+  if (!res.ok) throw await buildApiError(res, "Error al eliminar el ingrediente");
 }

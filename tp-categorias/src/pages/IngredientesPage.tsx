@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "@tanstack/react-form";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
   getIngredientes,
@@ -8,7 +7,8 @@ import {
   updateIngrediente,
   deleteIngrediente,
 } from "../services/ingrediente";
-import type { Ingrediente } from "../types/ingrediente";
+import type { Ingrediente, IngredienteCreate } from "../types/ingrediente";
+import IngredienteModal from "../components/IngredienteModal";
 import { DataTable } from "../components/ui/DataTable";
 import { LoadingState, EmptyState, ErrorState } from "../components/ui/StatusStates";
 
@@ -16,6 +16,11 @@ const IngredientesPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingIngrediente, setEditingIngrediente] = useState<Ingrediente | null>(null);
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingIngrediente(null);
+  };
 
   const {
     data: ingredientes = [],
@@ -50,35 +55,34 @@ const IngredientesPage: React.FC = () => {
     },
   });
 
-  const form = useForm({
-    defaultValues: {
-      nombre: editingIngrediente?.nombre || "",
-    },
-    onSubmit: async ({ value }) => {
-      if (editingIngrediente) {
-        updateMutation.mutate({ id: editingIngrediente.id, data: value });
-      } else {
-        createMutation.mutate(value);
-      }
-    },
-  });
+  const resetMutations = () => {
+    createMutation.reset();
+    updateMutation.reset();
+    deleteMutation.reset();
+  };
 
   const handleOpenCreate = () => {
+    resetMutations();
     setEditingIngrediente(null);
-    form.reset({ nombre: "" });
     setIsModalOpen(true);
   };
 
-  const handleOpenEdit = (ing: Ingrediente) => {
-    setEditingIngrediente(ing);
-    form.reset({ nombre: ing.nombre });
+  const handleOpenEdit = (item: Ingrediente) => {
+    resetMutations();
+    setEditingIngrediente(item);
     setIsModalOpen(true);
   };
 
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setEditingIngrediente(null);
+  const handleSubmit = (data: IngredienteCreate) => {
+    if (editingIngrediente) {
+      updateMutation.mutate({ id: editingIngrediente.id, data });
+    } else {
+      createMutation.mutate(data);
+    }
   };
+
+  const isSaving = createMutation.isPending || updateMutation.isPending;
+  const saveError = editingIngrediente ? updateMutation.error : createMutation.error;
 
   const columns: ColumnDef<Ingrediente>[] = [
     {
@@ -94,17 +98,23 @@ const IngredientesPage: React.FC = () => {
     {
       id: "acciones",
       header: "Acciones",
+      enableSorting: false,
       cell: ({ row }) => (
         <div className="flex justify-end gap-2">
           <button
-            onClick={() => handleOpenEdit(row.original)}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleOpenEdit(row.original);
+            }}
             className="px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition cursor-pointer"
           >
             Editar
           </button>
           <button
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               if (window.confirm("¿Deseas eliminar este ingrediente?")) {
+                resetMutations();
                 deleteMutation.mutate(row.original.id);
               }
             }}
@@ -134,6 +144,12 @@ const IngredientesPage: React.FC = () => {
         </button>
       </div>
 
+      {deleteMutation.isError && (
+        <div className="mb-4">
+          <ErrorState message={deleteMutation.error.message} />
+        </div>
+      )}
+
       {isLoading && <LoadingState message="Cargando ingredientes..." />}
       {isError && (
         <ErrorState message={error instanceof Error ? error.message : "Error al conectar con la API"} />
@@ -146,65 +162,14 @@ const IngredientesPage: React.FC = () => {
       )}
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">
-              {editingIngrediente ? "Editar Ingrediente" : "Nuevo Ingrediente"}
-            </h2>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                form.handleSubmit();
-              }}
-              className="space-y-4"
-            >
-              <form.Field
-                name="nombre"
-                validators={{
-                  onChange: ({ value }) => (!value.trim() ? "El nombre es obligatorio" : undefined),
-                }}
-              >
-                {(field) => (
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1">
-                      Nombre del Ingrediente
-                    </label>
-                    <input
-                      value={field.state.value}
-                      onBlur={field.handleBlur}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      placeholder="Ej: Mozzarella"
-                      className="w-full rounded-lg border border-gray-300 px-3.5 py-2 text-sm focus:border-indigo-600 focus:outline-hidden"
-                    />
-                    {field.state.meta.errors ? (
-                      <em className="text-xs text-rose-600 mt-1 block">
-                        {field.state.meta.errors.join(", ")}
-                      </em>
-                    ) : null}
-                  </div>
-                )}
-              </form.Field>
-
-              <div className="flex justify-end gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={handleCloseModal}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={createMutation.isPending || updateMutation.isPending}
-                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition disabled:opacity-50 cursor-pointer"
-                >
-                  Guardar
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <IngredienteModal
+          key={editingIngrediente?.id ?? "nuevo"}
+          ingrediente={editingIngrediente}
+          isSaving={isSaving}
+          error={saveError}
+          onSubmit={handleSubmit}
+          onClose={handleCloseModal}
+        />
       )}
     </main>
   );
